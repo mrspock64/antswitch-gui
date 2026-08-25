@@ -57,7 +57,7 @@ func main() {
 	cfg := loadConfig()
 	a.Settings().SetTheme(newAntSwitchTheme(cfg.Light))
 
-	w := a.NewWindow("AntSwitch")
+	w := a.NewWindow("AntSwitch by SA0LEK")
 
 	st := &antState{
 		cfg:    cfg,
@@ -220,9 +220,9 @@ func (st *antState) showSettings() {
 		widget.NewFormItem("Token", tokenEntry),
 	)
 
-	settingsWin := st.app.NewWindow("AntSwitch Settings")
+	settingsWin := st.app.NewWindow("AntSwitch by SA0LEK — Settings")
 
-	versionLabel := widget.NewLabel("Version: " + Version)
+	versionLabel := widget.NewLabel("AntSwitch by SA0LEK · " + Version)
 	checkUpdateBtn := widget.NewButton("Sök efter uppdatering", func() {
 		go st.checkForUpdates(true)
 	})
