@@ -78,6 +78,30 @@ Output lands in `fyne-cross/dist/<platform>/`.
 
 The ☀/🌙 button top right toggles the theme. The choice is saved in the config.
 
+## Windows SmartScreen / browser "virus" warning
+
+The Windows build (`antswitch-gui-windows-amd64.exe`) isn't code-signed, so
+Chrome's Safe Browsing check and Windows SmartScreen will likely flag it as
+unrecognized or "dangerous" the first time anyone downloads it. This is a
+**reputation-based false positive**, not a real detection — a brand-new
+binary from a small project has no download history yet, and unsigned Go
+binaries (statically linked, no publisher signature) trigger this heuristic
+especially often. A proper fix means buying a code-signing certificate and
+verifying identity with a CA; until/unless that happens, here's how to get
+past the warning and confirm the file is genuinely what we built:
+
+1. **Verify the checksum** — every release includes a `checksums.txt`.
+   On Windows (PowerShell):
+   ```powershell
+   Get-FileHash antswitch-gui-windows-amd64.exe -Algorithm SHA256
+   ```
+   Compare the output to the matching line in `checksums.txt` from the same
+   release. If it matches, the file is exactly what our CI build produced.
+2. **In Chrome**: click the download's "..." menu → **Keep** (or **Keep
+   anyway**) if prompted.
+3. **In Windows SmartScreen** (when running the .exe): click **More info**,
+   then **Run anyway**.
+
 ## Auto-update
 
 The app automatically checks (silently, in the background) against GitHub
