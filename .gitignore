@@ -1,0 +1,5 @@
+/antswitch-gui
+/AntSwitch.app
+/fyne-cross/
+*.exe
+.DS_Store
