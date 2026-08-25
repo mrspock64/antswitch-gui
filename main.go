@@ -145,7 +145,7 @@ func (st *antState) buildFullUI() fyne.CanvasObject {
 
 	st.activeText = newBigText("—", colorAccent)
 	activeCard := newCard(container.NewVBox(
-		newCaption("Aktiv antenn"),
+		newCaption("Active antenna"),
 		st.activeText,
 		widget.NewSeparator(),
 		statusRow,
@@ -159,7 +159,7 @@ func (st *antState) buildFullUI() fyne.CanvasObject {
 		grid.Add(btn)
 	}
 	buttonsCard := newCard(container.NewVBox(
-		newCaption("Välj antenn"),
+		newCaption("Select antenna"),
 		grid,
 	))
 
@@ -223,7 +223,7 @@ func (st *antState) showSettings() {
 	settingsWin := st.app.NewWindow("AntSwitch by SA0LEK — Settings")
 
 	versionLabel := widget.NewLabel("AntSwitch by SA0LEK · " + Version)
-	checkUpdateBtn := widget.NewButton("Sök efter uppdatering", func() {
+	checkUpdateBtn := widget.NewButton("Check for updates", func() {
 		go st.checkForUpdates(true)
 	})
 	updateRow := container.NewBorder(nil, nil, versionLabel, checkUpdateBtn)
@@ -268,15 +268,15 @@ func (st *antState) checkForUpdates(manual bool) {
 	if !isNewerVersion(Version, rel.TagName) {
 		if manual {
 			fyne.Do(func() {
-				dialog.ShowInformation("Uppdatering", fmt.Sprintf("Du kör senaste versionen (%s).", Version), st.win)
+				dialog.ShowInformation("Update", fmt.Sprintf("You're running the latest version (%s).", Version), st.win)
 			})
 		}
 		return
 	}
 
 	fyne.Do(func() {
-		dialog.ShowConfirm("Uppdatering tillgänglig",
-			fmt.Sprintf("%s finns tillgänglig (du kör %s). Ladda ner och installera nu?", rel.TagName, Version),
+		dialog.ShowConfirm("Update available",
+			fmt.Sprintf("%s is available (you're running %s). Download and install now?", rel.TagName, Version),
 			func(ok bool) {
 				if ok {
 					go st.downloadAndInstall(rel)
@@ -296,8 +296,8 @@ func (st *antState) downloadAndInstall(rel *githubRelease) {
 			dialog.ShowError(err, st.win)
 			return
 		}
-		dialog.ShowConfirm("Uppdatering installerad",
-			"Starta om AntSwitch nu för att använda den nya versionen?",
+		dialog.ShowConfirm("Update installed",
+			"Restart AntSwitch now to use the new version?",
 			func(ok bool) {
 				if ok {
 					relaunchAndExit()

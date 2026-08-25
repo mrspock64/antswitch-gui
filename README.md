@@ -1,67 +1,68 @@
 # antswitch-gui
 
-Liten fristående GUI-klient (Go + [Fyne](https://fyne.io)) för att styra en
-AT-14 fjärrstyrd antennswitch (ESP32/TTGO T-Display firmware,
-[mrspock64/antenna-switch](https://github.com/mrspock64/antenna-switch)) över
-nätverket.
+Small standalone GUI client (Go + [Fyne](https://fyne.io)) for controlling an
+AT-14 remote antenna switch (ESP32/TTGO T-Display firmware,
+[mrspock64/antenna-switch](https://github.com/mrspock64/antenna-switch)) over
+the network.
 
-Mörkt kortbaserat gränssnitt med orange accentfärg, stor tydlig
-"aktiv antenn"-text och fyra knappar för antennvalen (namnen hämtas från
-enhetens API, inte hårdkodade). Automatisk polling håller vyn uppdaterad om
-antennen byts från webb-UI, MQTT eller enhetens egna knappar.
+Dark, card-based interface with an orange accent color, a large "active
+antenna" display, and four buttons for the antenna choices (names are
+fetched from the device's API, not hardcoded). Automatic polling keeps the
+view in sync if the antenna is switched from the web UI, MQTT, or the
+device's own buttons.
 
-Fönstret är resizbart och har två lägen (växlas med ⛶-knappen uppe till
-höger, valet sparas):
+The window is resizable and has two modes (toggled with the ⛶ button top
+right, the choice is saved):
 
-- **Full** — kort med aktiv antenn, status och antennknappar i grid.
-- **Mini** — smal horisontell rad (dot, aktiv antenn, fyra knappar) att ha
-  liggande bredvid t.ex. radio-mjukvara medan du kör.
+- **Full** — cards with active antenna, status, and antenna buttons in a grid.
+- **Mini** — a slim horizontal bar (dot, active antenna, four buttons) to
+  keep alongside e.g. your radio software while operating.
 
-## Köra
+## Running
 
 ```bash
 go run .
 ```
 
-Första gången öppnas ingen anslutning förrän du satt värdadress och API-token
-via kugghjulsknappen uppe till höger. Inställningarna sparas i
+The first time, no connection is made until you set the host address and
+API token via the gear button top right. Settings are saved to
 `~/.antswitch-gui.json`.
 
-- **Host**: enhetens IP (t.ex. `192.168.1.50`) eller mDNS-namnet
-  `antennswitch.local` (kräver Bonjour/mDNS på klientmaskinen — inbyggt på
-  macOS, kan kräva extra konfiguration på Windows/Linux; ange IP manuellt om
-  mDNS inte fungerar).
-- **Token**: samma `API_TOKEN` som är konfigurerad i firmwarens `config.h`.
+- **Host**: the device's IP (e.g. `192.168.1.50`) or the mDNS name
+  `antennswitch.local` (requires Bonjour/mDNS on the client machine — built
+  in on macOS, may need extra setup on Windows/Linux; enter the IP manually
+  if mDNS doesn't work).
+- **Token**: the same `API_TOKEN` configured in the firmware's `config.h`.
 
-## Bygga
+## Building
 
-Native build (kräver CGO/OpenGL-toolchain för värdplattformen, vilket Fyne
-behöver):
+Native build (requires a CGO/OpenGL toolchain for the host platform, which
+Fyne needs):
 
 ```bash
 go build -o antswitch-gui .
 ```
 
-### Paketera som .app (macOS) — inget terminalfönster
+### Package as a .app (macOS) — no terminal window
 
-Kör direkt via `go build` öppnas ett terminalfönster tillsammans med appen.
-Paketera istället en riktig `.app`-bunt med `fyne package` (dubbelklickbar,
-ingen terminal, egen ikon från `Icon.png`):
+Running it via plain `go build` opens a terminal window alongside the app.
+Instead, package a real `.app` bundle with `fyne package` (double-clickable,
+no terminal, its own icon from `Icon.png`):
 
 ```bash
 go install fyne.io/fyne/v2/cmd/fyne@latest
 fyne package -os darwin -icon Icon.png -name AntSwitch -appID net.sm7iun.antswitch-gui
 ```
 
-Detta skapar `AntSwitch.app`. Flytta den till `/Applications` om du vill ha
-den i Launchpad/Spotlight.
+This creates `AntSwitch.app`. Move it to `/Applications` if you want it in
+Launchpad/Spotlight.
 
-### Korskompilering
+### Cross-compiling
 
-Fyne-appar länkar mot OpenGL via CGO, så ren `GOOS=... go build` fungerar
-inte rakt av mellan plattformar. Använd
-[fyne-cross](https://github.com/fyne-io/fyne-cross) (kräver Docker) för att
-bygga macOS-, Windows- och Linux-binärer från samma källkod:
+Fyne apps link against OpenGL via CGO, so a plain `GOOS=... go build` doesn't
+work across platforms out of the box. Use
+[fyne-cross](https://github.com/fyne-io/fyne-cross) (requires Docker) to
+build macOS, Windows, and Linux binaries from the same source:
 
 ```bash
 go install fyne.io/fyne/v2/cmd/fyne-cross@latest
@@ -71,29 +72,29 @@ fyne-cross windows -arch=amd64
 fyne-cross linux -arch=amd64
 ```
 
-Resultaten hamnar i `fyne-cross/dist/<plattform>/`.
+Output lands in `fyne-cross/dist/<platform>/`.
 
-## Ljust/mörkt läge
+## Light/dark mode
 
-☀/🌙-knappen uppe till höger växlar tema. Valet sparas i configen.
+The ☀/🌙 button top right toggles the theme. The choice is saved in the config.
 
-## Auto-uppdatering
+## Auto-update
 
-Appen kollar automatiskt (tyst, i bakgrunden) mot GitHub Releases
-([mrspock64/antswitch-gui](https://github.com/mrspock64/antswitch-gui))
-någon sekund efter start, och du kan även klicka **"Sök efter uppdatering"**
-i inställningarna. Hittas en nyare version frågar appen om lov innan den
-laddar ner och installerar — själva bytet sker i binären på disk (via
-[minio/selfupdate](https://github.com/minio/selfupdate)), verifierat mot
-SHA256-checksumman i releasens `checksums.txt`. Efter installation frågar
-appen om den ska starta om direkt.
+The app automatically checks (silently, in the background) against GitHub
+Releases ([mrspock64/antswitch-gui](https://github.com/mrspock64/antswitch-gui))
+a few seconds after startup, and you can also click **"Check for updates"**
+in Settings. If a newer version is found, the app asks for confirmation
+before downloading and installing — the actual swap happens to the binary
+on disk (via [minio/selfupdate](https://github.com/minio/selfupdate)),
+verified against the SHA256 checksum in the release's `checksums.txt`.
+After installation, the app asks whether to restart right away.
 
-### Släppa en ny version
+### Releasing a new version
 
-En pushad tagg i formen `vX.Y.Z` triggar
-[.github/workflows/release.yml](.github/workflows/release.yml), som bygger
-binärer för macOS (Apple Silicon/arm64), Windows och Linux, räknar ut
-checksums.txt och skapar en GitHub Release med alla filer bifogade:
+Pushing a tag in the form `vX.Y.Z` triggers
+[.github/workflows/release.yml](.github/workflows/release.yml), which builds
+binaries for macOS (Apple Silicon/arm64), Windows, and Linux, computes
+checksums.txt, and creates a GitHub Release with all the files attached:
 
 ```bash
 git tag v0.2.0
@@ -103,5 +104,5 @@ git push origin v0.2.0
 ## API
 
 - `GET /api/status` → `{"active":0-3,"names":["Dipole","Vertical","Beam","EFHW"]}`
-- `GET /api/select?ant=<0-3>&token=<API_TOKEN>` → samma svar vid lyckat val,
-  401/400 med `{"error":"..."}` vid fel.
+- `GET /api/select?ant=<0-3>&token=<API_TOKEN>` → same response on success,
+  401/400 with `{"error":"..."}` on failure.
