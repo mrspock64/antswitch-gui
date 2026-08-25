@@ -201,6 +201,11 @@ func (st *antState) buildMiniUI() fyne.CanvasObject {
 	return container.NewPadded(row)
 }
 
+// showSettings opens Settings in its own OS window rather than an in-canvas
+// dialog. In mini mode the main window is very short (460x78) — a dialog
+// docked to it would force the whole window to balloon out to fit the
+// dialog's content and not shrink back down afterwards, which looks broken.
+// A separate window sidesteps that entirely.
 func (st *antState) showSettings() {
 	hostEntry := widget.NewEntry()
 	hostEntry.SetText(st.cfg.Host)
@@ -215,28 +220,33 @@ func (st *antState) showSettings() {
 		widget.NewFormItem("Token", tokenEntry),
 	)
 
+	settingsWin := st.app.NewWindow("AntSwitch Settings")
+
 	versionLabel := widget.NewLabel("Version: " + Version)
 	checkUpdateBtn := widget.NewButton("Sök efter uppdatering", func() {
 		go st.checkForUpdates(true)
 	})
 	updateRow := container.NewBorder(nil, nil, versionLabel, checkUpdateBtn)
 
-	content := container.NewVBox(form, widget.NewSeparator(), updateRow)
-
-	d := dialog.NewCustomConfirm("Settings", "Save", "Cancel", content, func(ok bool) {
-		if !ok {
-			return
-		}
+	cancelBtn := widget.NewButton("Cancel", func() { settingsWin.Close() })
+	saveBtn := widget.NewButton("Save", func() {
 		st.cfg.Host = hostEntry.Text
 		st.cfg.Token = tokenEntry.Text
 		if err := saveConfig(st.cfg); err != nil {
-			dialog.ShowError(err, st.win)
+			dialog.ShowError(err, settingsWin)
 			return
 		}
 		go st.refreshStatus()
-	}, st.win)
-	d.Resize(fyne.NewSize(340, 220))
-	d.Show()
+		settingsWin.Close()
+	})
+	saveBtn.Importance = widget.HighImportance
+	buttonRow := container.NewHBox(layout.NewSpacer(), cancelBtn, saveBtn)
+
+	content := container.NewVBox(form, widget.NewSeparator(), updateRow, buttonRow)
+	settingsWin.SetContent(container.NewPadded(content))
+	settingsWin.Resize(fyne.NewSize(340, 220))
+	settingsWin.SetFixedSize(true)
+	settingsWin.Show()
 }
 
 // checkForUpdates queries GitHub for the latest release. If manual is true
