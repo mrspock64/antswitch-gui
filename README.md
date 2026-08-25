@@ -92,7 +92,7 @@ appen om den ska starta om direkt.
 
 En pushad tagg i formen `vX.Y.Z` triggar
 [.github/workflows/release.yml](.github/workflows/release.yml), som bygger
-binärer för macOS (arm64 + amd64), Windows och Linux, räknar ut
+binärer för macOS (Apple Silicon/arm64), Windows och Linux, räknar ut
 checksums.txt och skapar en GitHub Release med alla filer bifogade:
 
 ```bash

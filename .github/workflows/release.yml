@@ -14,9 +14,6 @@ jobs:
           - os: macos-14
             goos: darwin
             goarch: arm64
-          - os: macos-13
-            goos: darwin
-            goarch: amd64
           - os: windows-latest
             goos: windows
             goarch: amd64
@@ -35,7 +32,7 @@ jobs:
         if: matrix.goos == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev
+          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
 
       - name: Build
         shell: bash
