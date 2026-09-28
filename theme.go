@@ -29,11 +29,11 @@ var (
 
 // Shared across both variants.
 var (
-	colorAccent      = color.NRGBA{R: 0xf2, G: 0xa9, B: 0x3b, A: 0xff}
-	colorAccentDim   = color.NRGBA{R: 0xf2, G: 0xa9, B: 0x3b, A: 0x33}
-	colorOnAccent    = color.NRGBA{R: 0x18, G: 0x12, B: 0x08, A: 0xff}
-	colorSuccess     = color.NRGBA{R: 0x2f, G: 0xb8, B: 0x72, A: 0xff}
-	colorError       = color.NRGBA{R: 0xe0, G: 0x4a, B: 0x4a, A: 0xff}
+	colorAccent    = color.NRGBA{R: 0xf2, G: 0xa9, B: 0x3b, A: 0xff}
+	colorAccentDim = color.NRGBA{R: 0xf2, G: 0xa9, B: 0x3b, A: 0x33}
+	colorOnAccent  = color.NRGBA{R: 0x18, G: 0x12, B: 0x08, A: 0xff}
+	colorSuccess   = color.NRGBA{R: 0x2f, G: 0xb8, B: 0x72, A: 0xff}
+	colorError     = color.NRGBA{R: 0xe0, G: 0x4a, B: 0x4a, A: 0xff}
 )
 
 // antSwitchTheme is a card-styled theme with an orange accent that can be

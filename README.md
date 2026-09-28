@@ -1,15 +1,24 @@
 # antswitch-gui
 
-Small standalone GUI client (Go + [Fyne](https://fyne.io)) for controlling an
-AT-14 remote antenna switch (ESP32/TTGO T-Display firmware,
-[mrspock64/antenna-switch](https://github.com/mrspock64/antenna-switch)) over
-the network.
+Small standalone GUI client (Go + [Fyne](https://fyne.io)) for controlling a
+remote antenna switch over the network. Two device profiles are supported —
+only one is ever active/polled at a time, switched in Settings:
+
+- **AT-14** — ESP32/TTGO T-Display firmware,
+  [mrspock64/antenna-switch](https://github.com/mrspock64/antenna-switch), a
+  4-port switch with a JSON HTTP API. Antenna names are fetched live from
+  the device.
+- **AS-1289** — a Microbit AS-1289 5-port HF switch with built-in network
+  control (no separate firmware project). It has no CORS header, so it can
+  only be driven from a native HTTP client like this app, not a browser
+  page. Its protocol doesn't expose antenna names, so those are entered
+  manually in Settings; it optionally supports HTTP Basic Auth if the
+  device's own web password protection is turned on.
 
 Dark, card-based interface with an orange accent color, a large "active
-antenna" display, and four buttons for the antenna choices (names are
-fetched from the device's API, not hardcoded). Automatic polling keeps the
-view in sync if the antenna is switched from the web UI, MQTT, or the
-device's own buttons.
+antenna" display, and one button per antenna port. Automatic polling keeps
+the view in sync if the antenna is switched from elsewhere (the device's web
+UI, MQTT, its own buttons, etc).
 
 The window is resizable and has two modes (toggled with the ⛶ button top
 right, the choice is saved):
@@ -24,15 +33,25 @@ right, the choice is saved):
 go run .
 ```
 
-The first time, no connection is made until you set the host address and
-API token via the gear button top right. Settings are saved to
-`~/.antswitch-gui.json`.
+The first time, no connection is made until you configure a device via the
+gear button top right. Settings are saved to `~/.antswitch-gui.json`. Pick
+**AT-14** or **AS-1289** from the Device dropdown — its fields appear below;
+Save switches the app over to that profile.
 
+**AT-14**
 - **Host**: the device's IP (e.g. `192.168.1.50`) or the mDNS name
   `antennswitch.local` (requires Bonjour/mDNS on the client machine — built
   in on macOS, may need extra setup on Windows/Linux; enter the IP manually
   if mDNS doesn't work).
 - **Token**: the same `API_TOKEN` configured in the firmware's `config.h`.
+
+**AS-1289**
+- **Host**: the device's IP (e.g. `192.168.86.40`).
+- **Username / Password**: only needed if the device's own optional web
+  password protection is enabled; leave blank otherwise.
+- **Port 1–5**: the antenna name shown on each button. The device doesn't
+  report these over its status protocol, so type in whatever you've named
+  them on the device's own `/settings` page; a blank port shows as "Ant N".
 
 ## Building
 
@@ -127,6 +146,24 @@ git push origin v0.2.0
 
 ## API
 
+### AT-14
+
 - `GET /api/status` → `{"active":0-3,"names":["Dipole","Vertical","Beam","EFHW"]}`
 - `GET /api/select?ant=<0-3>&token=<API_TOKEN>` → same response on success,
   401/400 with `{"error":"..."}` on failure.
+
+### AS-1289
+
+Undocumented by the manufacturer; reverse-engineered from the device's own
+`/relays.js` and verified live against real hardware.
+
+- `GET /setswitch.htm?ap<N>&ON%20&set=<unix-ms>` (N = 1–5) — selects antenna
+  N; the switch is exclusive, so every other port releases automatically.
+  Empty response body on success.
+- `GET /setswitch.htm?upd=<unix-ms>` — the same status poll the device's own
+  page uses. Response is a pipe-separated string, e.g.
+  `ap1|aa2|aa3|aa4|aa5|h0|ga|l64039`: exactly one `ap<N>` token marks the
+  active port (the rest are `aa<N>`, off); `h<kHz>` is the current frequency
+  if a radio connection reports one; `ga`/`gp` is an automatic-band-select
+  flag tied to an RRC-1258 link (unrelated to this app); `l<n>` is an
+  unspecified counter.

@@ -19,17 +19,18 @@ import (
 
 const pollInterval = 2500 * time.Millisecond
 
-const antennaCount = 4
-
 var (
 	fullWindowSize = fyne.NewSize(420, 300)
 	miniWindowSize = fyne.NewSize(460, 78)
 )
 
-// antState is the mutable UI/runtime state for the running app.
+// antState is the mutable UI/runtime state for the running app. Exactly one
+// device profile (AT-14 or AS-1289) is active/polled at a time, selected by
+// cfg.Device; switching profiles resets names/buttons for the new port count.
 type antState struct {
-	cfg    Config
-	client *AntennaSwitchClient
+	cfg          Config
+	at14Client   *AntennaSwitchClient
+	as1289Client *AS1289Client
 
 	app fyne.App
 	win fyne.Window
@@ -37,12 +38,75 @@ type antState struct {
 	statusDot   *statusDot
 	statusLabel *widget.Label
 	activeText  *canvas.Text
-	buttons     [antennaCount]*widget.Button
+	buttons     []*widget.Button
 
 	names   []string
 	active  int
 	online  bool
 	pending bool
+}
+
+// portCount returns how many antenna ports the current device profile has.
+func (st *antState) portCount() int {
+	if st.cfg.Device == DeviceAS1289 {
+		return as1289PortCount
+	}
+	return 4
+}
+
+// currentHost returns the host/IP for whichever profile is active.
+func (st *antState) currentHost() string {
+	if st.cfg.Device == DeviceAS1289 {
+		return st.cfg.AS1289.Host
+	}
+	return st.cfg.AT14.Host
+}
+
+// resetNamesPlaceholder resets names/active to generic placeholders sized
+// for the current profile's port count — used at startup and whenever the
+// device profile is switched, so buttons never index past st.names.
+func (st *antState) resetNamesPlaceholder() {
+	n := st.portCount()
+	names := make([]string, n)
+	for i := range names {
+		names[i] = fmt.Sprintf("Ant %d", i+1)
+	}
+	st.names = names
+	st.active = -1
+}
+
+// nameFor safely reads st.names[i], falling back to a generic label if the
+// slice hasn't caught up yet (e.g. mid device-switch).
+func (st *antState) nameFor(i int) string {
+	if i < len(st.names) {
+		return st.names[i]
+	}
+	return fmt.Sprintf("Ant %d", i+1)
+}
+
+// fetchStatus polls whichever device profile is currently active.
+func (st *antState) fetchStatus(ctx context.Context) (*DeviceStatus, error) {
+	if st.cfg.Device == DeviceAS1289 {
+		return st.as1289Client.GetStatus(ctx, st.cfg.AS1289.Host, st.cfg.AS1289.AuthUser, st.cfg.AS1289.AuthPass, st.cfg.AS1289.Names)
+	}
+	s, err := st.at14Client.GetStatus(ctx, st.cfg.AT14.Host)
+	if err != nil {
+		return nil, err
+	}
+	return &DeviceStatus{Active: s.Active, Names: s.Names}, nil
+}
+
+// doSelectAntenna selects antenna idx (0-based) on whichever device profile
+// is currently active.
+func (st *antState) doSelectAntenna(ctx context.Context, idx int) (*DeviceStatus, error) {
+	if st.cfg.Device == DeviceAS1289 {
+		return st.as1289Client.SelectAntenna(ctx, st.cfg.AS1289.Host, st.cfg.AS1289.AuthUser, st.cfg.AS1289.AuthPass, idx, st.cfg.AS1289.Names)
+	}
+	s, err := st.at14Client.SelectAntenna(ctx, st.cfg.AT14.Host, st.cfg.AT14.Token, idx)
+	if err != nil {
+		return nil, err
+	}
+	return &DeviceStatus{Active: s.Active, Names: s.Names}, nil
 }
 
 func main() {
@@ -60,13 +124,13 @@ func main() {
 	w := a.NewWindow("AntSwitch by SA0LEK")
 
 	st := &antState{
-		cfg:    cfg,
-		client: newAntennaSwitchClient(),
-		app:    a,
-		win:    w,
-		names:  []string{"Ant 1", "Ant 2", "Ant 3", "Ant 4"},
-		active: -1,
+		cfg:          cfg,
+		at14Client:   newAntennaSwitchClient(),
+		as1289Client: newAS1289Client(),
+		app:          a,
+		win:          w,
 	}
+	st.resetNamesPlaceholder()
 
 	st.rebuildUI()
 
@@ -95,7 +159,7 @@ func (st *antState) rebuildUI() {
 		st.win.Resize(fullWindowSize)
 		st.win.SetFixedSize(false)
 	}
-	if st.cfg.Host != "" {
+	if st.currentHost() != "" {
 		go st.refreshStatus()
 	}
 }
@@ -151,10 +215,12 @@ func (st *antState) buildFullUI() fyne.CanvasObject {
 		statusRow,
 	))
 
+	n := st.portCount()
+	st.buttons = make([]*widget.Button, n)
 	grid := container.NewGridWithColumns(2)
-	for i := 0; i < antennaCount; i++ {
+	for i := 0; i < n; i++ {
 		idx := i
-		btn := widget.NewButton(st.names[i], func() { st.selectAntenna(idx) })
+		btn := widget.NewButton(st.nameFor(i), func() { st.selectAntenna(idx) })
 		st.buttons[i] = btn
 		grid.Add(btn)
 	}
@@ -187,10 +253,12 @@ func (st *antState) buildMiniUI() fyne.CanvasObject {
 	// can keep updating it uniformly across modes.
 	left := container.NewHBox(st.statusDot.object())
 
-	grid := container.NewGridWithColumns(antennaCount)
-	for i := 0; i < antennaCount; i++ {
+	n := st.portCount()
+	st.buttons = make([]*widget.Button, n)
+	grid := container.NewGridWithColumns(n)
+	for i := 0; i < n; i++ {
 		idx := i
-		btn := widget.NewButton(st.names[i], func() { st.selectAntenna(idx) })
+		btn := widget.NewButton(st.nameFor(i), func() { st.selectAntenna(idx) })
 		st.buttons[i] = btn
 		grid.Add(btn)
 	}
@@ -201,24 +269,78 @@ func (st *antState) buildMiniUI() fyne.CanvasObject {
 	return container.NewPadded(row)
 }
 
+const (
+	deviceOptionAT14   = "AT-14"
+	deviceOptionAS1289 = "AS-1289 (5-port)"
+)
+
 // showSettings opens Settings in its own OS window rather than an in-canvas
 // dialog. In mini mode the main window is very short (460x78) — a dialog
 // docked to it would force the whole window to balloon out to fit the
 // dialog's content and not shrink back down afterwards, which looks broken.
 // A separate window sidesteps that entirely.
+//
+// Only one device profile is ever active/polled at a time; the picker here
+// just swaps which profile's fields are shown and, on Save, which one the
+// rest of the app talks to.
 func (st *antState) showSettings() {
-	hostEntry := widget.NewEntry()
-	hostEntry.SetText(st.cfg.Host)
-	hostEntry.SetPlaceHolder("antennswitch.local or 192.168.1.50")
+	at14HostEntry := widget.NewEntry()
+	at14HostEntry.SetText(st.cfg.AT14.Host)
+	at14HostEntry.SetPlaceHolder("antennswitch.local or 192.168.1.50")
 
-	tokenEntry := widget.NewPasswordEntry()
-	tokenEntry.SetText(st.cfg.Token)
-	tokenEntry.SetPlaceHolder("API token")
+	at14TokenEntry := widget.NewPasswordEntry()
+	at14TokenEntry.SetText(st.cfg.AT14.Token)
+	at14TokenEntry.SetPlaceHolder("API token")
 
-	form := widget.NewForm(
-		widget.NewFormItem("Host", hostEntry),
-		widget.NewFormItem("Token", tokenEntry),
+	at14Panel := widget.NewForm(
+		widget.NewFormItem("Host", at14HostEntry),
+		widget.NewFormItem("Token", at14TokenEntry),
 	)
+
+	as1289HostEntry := widget.NewEntry()
+	as1289HostEntry.SetText(st.cfg.AS1289.Host)
+	as1289HostEntry.SetPlaceHolder(as1289DefaultHost)
+
+	as1289UserEntry := widget.NewEntry()
+	as1289UserEntry.SetText(st.cfg.AS1289.AuthUser)
+	as1289UserEntry.SetPlaceHolder("optional")
+
+	as1289PassEntry := widget.NewPasswordEntry()
+	as1289PassEntry.SetText(st.cfg.AS1289.AuthPass)
+	as1289PassEntry.SetPlaceHolder("optional")
+
+	as1289NameEntries := make([]*widget.Entry, as1289PortCount)
+	as1289FormItems := []*widget.FormItem{
+		widget.NewFormItem("Host", as1289HostEntry),
+		widget.NewFormItem("Username", as1289UserEntry),
+		widget.NewFormItem("Password", as1289PassEntry),
+	}
+	for i := 0; i < as1289PortCount; i++ {
+		e := widget.NewEntry()
+		if i < len(st.cfg.AS1289.Names) {
+			e.SetText(st.cfg.AS1289.Names[i])
+		}
+		e.SetPlaceHolder(fmt.Sprintf("Ant %d", i+1))
+		as1289NameEntries[i] = e
+		as1289FormItems = append(as1289FormItems, widget.NewFormItem(fmt.Sprintf("Port %d", i+1), e))
+	}
+	as1289Panel := widget.NewForm(as1289FormItems...)
+
+	deviceSelect := widget.NewSelect([]string{deviceOptionAT14, deviceOptionAS1289}, nil)
+	deviceSelect.OnChanged = func(v string) {
+		if v == deviceOptionAS1289 {
+			at14Panel.Hide()
+			as1289Panel.Show()
+		} else {
+			as1289Panel.Hide()
+			at14Panel.Show()
+		}
+	}
+	if st.cfg.Device == DeviceAS1289 {
+		deviceSelect.SetSelected(deviceOptionAS1289)
+	} else {
+		deviceSelect.SetSelected(deviceOptionAT14)
+	}
 
 	settingsWin := st.app.NewWindow("AntSwitch by SA0LEK — Settings")
 
@@ -230,22 +352,51 @@ func (st *antState) showSettings() {
 
 	cancelBtn := widget.NewButton("Cancel", func() { settingsWin.Close() })
 	saveBtn := widget.NewButton("Save", func() {
-		st.cfg.Host = hostEntry.Text
-		st.cfg.Token = tokenEntry.Text
+		newDevice := DeviceAT14
+		if deviceSelect.Selected == deviceOptionAS1289 {
+			newDevice = DeviceAS1289
+		}
+		deviceChanged := newDevice != st.cfg.Device
+
+		st.cfg.Device = newDevice
+		st.cfg.AT14.Host = at14HostEntry.Text
+		st.cfg.AT14.Token = at14TokenEntry.Text
+		st.cfg.AS1289.Host = as1289HostEntry.Text
+		st.cfg.AS1289.AuthUser = as1289UserEntry.Text
+		st.cfg.AS1289.AuthPass = as1289PassEntry.Text
+		names := make([]string, as1289PortCount)
+		for i, e := range as1289NameEntries {
+			names[i] = e.Text
+		}
+		st.cfg.AS1289.Names = names
+
 		if err := saveConfig(st.cfg); err != nil {
 			dialog.ShowError(err, settingsWin)
 			return
 		}
-		go st.refreshStatus()
+		if deviceChanged {
+			st.resetNamesPlaceholder()
+			st.rebuildUI()
+		} else {
+			go st.refreshStatus()
+		}
 		settingsWin.Close()
 	})
 	saveBtn.Importance = widget.HighImportance
 	buttonRow := container.NewHBox(layout.NewSpacer(), cancelBtn, saveBtn)
 
-	content := container.NewVBox(form, widget.NewSeparator(), updateRow, buttonRow)
+	scrollArea := container.NewVScroll(container.NewVBox(
+		widget.NewLabel("Device"), deviceSelect,
+		widget.NewSeparator(),
+		at14Panel, as1289Panel,
+		widget.NewSeparator(),
+		updateRow,
+	))
+	scrollArea.SetMinSize(fyne.NewSize(360, 320))
+
+	content := container.NewBorder(nil, buttonRow, nil, nil, scrollArea)
 	settingsWin.SetContent(container.NewPadded(content))
-	settingsWin.Resize(fyne.NewSize(340, 220))
-	settingsWin.SetFixedSize(true)
+	settingsWin.Resize(fyne.NewSize(380, 460))
 	settingsWin.Show()
 }
 
@@ -330,7 +481,8 @@ func (st *antState) pollLoop(ctx context.Context) {
 }
 
 func (st *antState) refreshStatus() {
-	if st.cfg.Host == "" {
+	host := st.currentHost()
+	if host == "" {
 		fyne.Do(func() {
 			st.online = false
 			_, _, _, _, muted, _ := currentPalette()
@@ -342,7 +494,7 @@ func (st *antState) refreshStatus() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
-	status, err := st.client.GetStatus(ctx, st.cfg.Host)
+	status, err := st.fetchStatus(ctx)
 
 	fyne.Do(func() {
 		if err != nil {
@@ -353,19 +505,19 @@ func (st *antState) refreshStatus() {
 		}
 		st.online = true
 		st.statusDot.setColor(colorSuccess)
-		st.statusLabel.SetText(fmt.Sprintf("Connected — %s", st.cfg.Host))
+		st.statusLabel.SetText(fmt.Sprintf("Connected — %s", host))
 		st.applyStatus(status)
 	})
 }
 
-func (st *antState) applyStatus(status *StatusResponse) {
-	if len(status.Names) == antennaCount {
+func (st *antState) applyStatus(status *DeviceStatus) {
+	if len(status.Names) == len(st.buttons) {
 		st.names = status.Names
 	}
 	st.active = status.Active
 
 	for i, btn := range st.buttons {
-		btn.SetText(st.names[i])
+		btn.SetText(st.nameFor(i))
 		if i == st.active {
 			btn.Importance = widget.HighImportance
 		} else {
@@ -383,7 +535,7 @@ func (st *antState) applyStatus(status *StatusResponse) {
 }
 
 func (st *antState) selectAntenna(idx int) {
-	if st.pending || st.cfg.Host == "" {
+	if st.pending || st.currentHost() == "" {
 		return
 	}
 	st.pending = true
@@ -392,7 +544,7 @@ func (st *antState) selectAntenna(idx int) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 		defer cancel()
-		status, err := st.client.SelectAntenna(ctx, st.cfg.Host, st.cfg.Token, idx)
+		status, err := st.doSelectAntenna(ctx, idx)
 
 		fyne.Do(func() {
 			st.pending = false
@@ -405,7 +557,7 @@ func (st *antState) selectAntenna(idx int) {
 			}
 			st.online = true
 			st.statusDot.setColor(colorSuccess)
-			st.statusLabel.SetText(fmt.Sprintf("Connected — %s", st.cfg.Host))
+			st.statusLabel.SetText(fmt.Sprintf("Connected — %s", st.currentHost()))
 			st.applyStatus(status)
 		})
 	}()
