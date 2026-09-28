@@ -55,6 +55,29 @@ jobs:
           name: antswitch-gui-${{ matrix.goos }}-${{ matrix.goarch }}
           path: ${{ env.ASSET_PATH }}
 
+      # The raw binary above is what the in-app auto-updater downloads to
+      # replace itself in place. It's not something a new user can install,
+      # though — no .app bundle/icon, and Gatekeeper has no sane way to
+      # trust a bare downloaded executable. Package a proper .app and wrap
+      # it in a .dmg for first-time installs on macOS.
+      - name: Package macOS .app and .dmg
+        if: matrix.goos == 'darwin'
+        shell: bash
+        run: |
+          go install fyne.io/fyne/v2/cmd/fyne@latest
+          version="${GITHUB_REF_NAME#v}"
+          "$(go env GOPATH)/bin/fyne" package --executable "$ASSET_PATH" --icon Icon.png --name AntSwitch --appID net.sm7iun.antswitch-gui --appVersion "$version"
+          mkdir dmg-root
+          cp -R AntSwitch.app dmg-root/
+          ln -s /Applications dmg-root/Applications
+          hdiutil create -volname "AntSwitch" -srcfolder dmg-root -ov -format UDZO AntSwitch-macos-arm64.dmg
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.goos == 'darwin'
+        with:
+          name: antswitch-gui-macos-dmg
+          path: AntSwitch-macos-arm64.dmg
+
   release:
     needs: build
     runs-on: ubuntu-latest

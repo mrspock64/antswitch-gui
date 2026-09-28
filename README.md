@@ -27,7 +27,27 @@ right, the choice is saved):
 - **Mini** — a slim horizontal bar (dot, active antenna, four buttons) to
   keep alongside e.g. your radio software while operating.
 
-## Running
+## Installing (macOS)
+
+Grab `AntSwitch-macos-arm64.dmg` from the
+[latest release](https://github.com/mrspock64/antswitch-gui/releases/latest),
+open it, and drag **AntSwitch** into **Applications**. This is for Apple
+Silicon Macs (M1 and later); there's no Intel/amd64 build yet.
+
+The app isn't notarized/signed, so the first launch will be blocked by
+Gatekeeper ("AntSwitch can't be opened because Apple cannot check it for
+malicious software"). Either:
+- **Right-click (or Control-click) AntSwitch → Open**, then confirm in the
+  dialog that appears (only needed once), or
+- go to **System Settings → Privacy & Security**, scroll down, and click
+  **Open Anyway** next to the AntSwitch message.
+
+This is the same kind of reputation-based warning as the
+[Windows one below](#windows-smartscreen--browser-virus-warning) — nothing
+was flagged as malicious, the app just isn't signed with a paid Apple
+Developer certificate.
+
+## Running from source
 
 ```bash
 go run .
