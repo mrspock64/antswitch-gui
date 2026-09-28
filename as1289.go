@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -58,6 +59,39 @@ func (c *AS1289Client) SelectAntenna(ctx context.Context, host, authUser, authPa
 		return nil, err
 	}
 	return c.GetStatus(ctx, host, authUser, authPass, names)
+}
+
+// as1289NameRe matches the antenna-name table cells in the device's own
+// /setswitch.htm page, e.g. `id="ar1">OCD</td>`. An empty port renders as
+// `id="ar3"></td>` (empty string between the tags, not a placeholder).
+var as1289NameRe = regexp.MustCompile(`id="ar(\d)">([^<]*)</td>`)
+
+// FetchNames scrapes antenna names off the device's own status page. The
+// names aren't in the pipe-separated status protocol, and they change
+// rarely (only when someone edits them on the device's own /settings page),
+// so this is meant to be called once when the profile is set up or on
+// demand — not on every poll.
+func (c *AS1289Client) FetchNames(ctx context.Context, host, authUser, authPass string) ([]string, error) {
+	body, err := c.doGet(ctx, normalizeHost(host)+"/setswitch.htm", authUser, authPass)
+	if err != nil {
+		return nil, err
+	}
+	return parseAS1289Names(body), nil
+}
+
+// parseAS1289Names returns exactly as1289PortCount entries, "" for any port
+// not found or left blank on the device (fallback text is applied later, at
+// display time, by displayNames).
+func parseAS1289Names(html string) []string {
+	names := make([]string, as1289PortCount)
+	for _, m := range as1289NameRe.FindAllStringSubmatch(html, -1) {
+		idx, err := strconv.Atoi(m[1])
+		if err != nil || idx < 1 || idx > as1289PortCount {
+			continue
+		}
+		names[idx-1] = strings.TrimSpace(m[2])
+	}
+	return names
 }
 
 func (c *AS1289Client) doGet(ctx context.Context, u, authUser, authPass string) (string, error) {

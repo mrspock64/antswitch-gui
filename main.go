@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -162,6 +163,50 @@ func (st *antState) rebuildUI() {
 	if st.currentHost() != "" {
 		go st.refreshStatus()
 	}
+	if st.cfg.Device == DeviceAS1289 {
+		go st.refreshAS1289Names()
+	}
+}
+
+// applyAS1289NamesToUI pushes freshly fetched names onto the button row /
+// active-antenna display, without touching status/connection state.
+func (st *antState) applyAS1289NamesToUI(names []string) {
+	st.names = displayNames(names, as1289PortCount)
+	for i, btn := range st.buttons {
+		if i < len(st.names) {
+			btn.SetText(st.names[i])
+		}
+	}
+	if st.active >= 0 && st.active < len(st.names) {
+		st.activeText.Text = st.names[st.active]
+		st.activeText.Refresh()
+	}
+}
+
+// refreshAS1289Names scrapes antenna names off the device's own status page
+// (they aren't in the polled status protocol) using the currently saved
+// AS-1289 config, and persists+applies whatever it finds. Meant to run once
+// per profile setup/switch, not on every poll — names change rarely. Silent
+// on failure: the periodic status poll already surfaces connectivity
+// errors, and the UI just keeps showing the last-known names.
+func (st *antState) refreshAS1289Names() {
+	host, user, pass := st.cfg.AS1289.Host, st.cfg.AS1289.AuthUser, st.cfg.AS1289.AuthPass
+
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+	names, err := st.as1289Client.FetchNames(ctx, host, user, pass)
+	if err != nil {
+		return
+	}
+
+	fyne.Do(func() {
+		if st.cfg.Device != DeviceAS1289 {
+			return // switched away while the fetch was in flight
+		}
+		st.cfg.AS1289.Names = names
+		_ = saveConfig(st.cfg)
+		st.applyAS1289NamesToUI(names)
+	})
 }
 
 func (st *antState) modeToggleButton() *widget.Button {
@@ -284,6 +329,8 @@ const (
 // just swaps which profile's fields are shown and, on Save, which one the
 // rest of the app talks to.
 func (st *antState) showSettings() {
+	settingsWin := st.app.NewWindow("AntSwitch by SA0LEK — Settings")
+
 	at14HostEntry := widget.NewEntry()
 	at14HostEntry.SetText(st.cfg.AT14.Host)
 	at14HostEntry.SetPlaceHolder("antennswitch.local or 192.168.1.50")
@@ -309,22 +356,40 @@ func (st *antState) showSettings() {
 	as1289PassEntry.SetText(st.cfg.AS1289.AuthPass)
 	as1289PassEntry.SetPlaceHolder("optional")
 
-	as1289NameEntries := make([]*widget.Entry, as1289PortCount)
-	as1289FormItems := []*widget.FormItem{
+	// Antenna names are read from the device itself (/setswitch.htm), not
+	// typed in here — this label just shows the last-known values, and the
+	// button below re-fetches on demand. Save also always re-fetches using
+	// whatever Host/Username/Password ends up saved, so a fresh setup or a
+	// name changed on the device's own /settings page is picked up without
+	// extra steps.
+	as1289NamesLabel := widget.NewLabel(strings.Join(displayNames(st.cfg.AS1289.Names, as1289PortCount), ", "))
+	as1289NamesLabel.Wrapping = fyne.TextWrapWord
+
+	var as1289RefreshBtn *widget.Button
+	as1289RefreshBtn = widget.NewButton("Refresh names from device", func() {
+		as1289RefreshBtn.Disable()
+		host, user, pass := as1289HostEntry.Text, as1289UserEntry.Text, as1289PassEntry.Text
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+			defer cancel()
+			names, err := st.as1289Client.FetchNames(ctx, host, user, pass)
+			fyne.Do(func() {
+				as1289RefreshBtn.Enable()
+				if err != nil {
+					dialog.ShowError(err, settingsWin)
+					return
+				}
+				as1289NamesLabel.SetText(strings.Join(displayNames(names, as1289PortCount), ", "))
+			})
+		}()
+	})
+
+	as1289Panel := widget.NewForm(
 		widget.NewFormItem("Host", as1289HostEntry),
 		widget.NewFormItem("Username", as1289UserEntry),
 		widget.NewFormItem("Password", as1289PassEntry),
-	}
-	for i := 0; i < as1289PortCount; i++ {
-		e := widget.NewEntry()
-		if i < len(st.cfg.AS1289.Names) {
-			e.SetText(st.cfg.AS1289.Names[i])
-		}
-		e.SetPlaceHolder(fmt.Sprintf("Ant %d", i+1))
-		as1289NameEntries[i] = e
-		as1289FormItems = append(as1289FormItems, widget.NewFormItem(fmt.Sprintf("Port %d", i+1), e))
-	}
-	as1289Panel := widget.NewForm(as1289FormItems...)
+		widget.NewFormItem("Names", container.NewVBox(as1289NamesLabel, as1289RefreshBtn)),
+	)
 
 	deviceSelect := widget.NewSelect([]string{deviceOptionAT14, deviceOptionAS1289}, nil)
 	deviceSelect.OnChanged = func(v string) {
@@ -341,8 +406,6 @@ func (st *antState) showSettings() {
 	} else {
 		deviceSelect.SetSelected(deviceOptionAT14)
 	}
-
-	settingsWin := st.app.NewWindow("AntSwitch by SA0LEK — Settings")
 
 	versionLabel := widget.NewLabel("AntSwitch by SA0LEK · " + Version)
 	checkUpdateBtn := widget.NewButton("Check for updates", func() {
@@ -364,11 +427,6 @@ func (st *antState) showSettings() {
 		st.cfg.AS1289.Host = as1289HostEntry.Text
 		st.cfg.AS1289.AuthUser = as1289UserEntry.Text
 		st.cfg.AS1289.AuthPass = as1289PassEntry.Text
-		names := make([]string, as1289PortCount)
-		for i, e := range as1289NameEntries {
-			names[i] = e.Text
-		}
-		st.cfg.AS1289.Names = names
 
 		if err := saveConfig(st.cfg); err != nil {
 			dialog.ShowError(err, settingsWin)
@@ -379,6 +437,9 @@ func (st *antState) showSettings() {
 			st.rebuildUI()
 		} else {
 			go st.refreshStatus()
+			if newDevice == DeviceAS1289 {
+				go st.refreshAS1289Names()
+			}
 		}
 		settingsWin.Close()
 	})

@@ -81,9 +81,11 @@ Save switches the app over to that profile.
 - **Host**: the device's IP (e.g. `192.168.86.40`).
 - **Username / Password**: only needed if the device's own optional web
   password protection is enabled; leave blank otherwise.
-- **Port 1–5**: the antenna name shown on each button. The device doesn't
-  report these over its status protocol, so type in whatever you've named
-  them on the device's own `/settings` page; a blank port shows as "Ant N".
+- **Names**: not typed in — the app scrapes them from the device's own
+  `/setswitch.htm` page (they aren't in the polled status protocol) once
+  when you save this profile, or on demand via **Refresh names from
+  device**. Rename ports on the device's own `/settings` page, then hit
+  refresh; a blank port shows as "Ant N".
 
 ## Building
 
@@ -189,6 +191,10 @@ git push origin v0.2.0
 Undocumented by the manufacturer; reverse-engineered from the device's own
 `/relays.js` and verified live against real hardware.
 
+- `GET /setswitch.htm?ga&OFF&set=<unix-ms>` sent immediately before every
+  select — the device can boot into "Automatic control" mode and revert a
+  manual selection once a radio is connected over its RRC-1258 link; this
+  turns that off first so the selection sticks.
 - `GET /setswitch.htm?ap<N>&ON%20&set=<unix-ms>` (N = 1–5) — selects antenna
   N; the switch is exclusive, so every other port releases automatically.
   Empty response body on success.
@@ -196,6 +202,10 @@ Undocumented by the manufacturer; reverse-engineered from the device's own
   page uses. Response is a pipe-separated string, e.g.
   `ap1|aa2|aa3|aa4|aa5|h0|ga|l64039`: exactly one `ap<N>` token marks the
   active port (the rest are `aa<N>`, off); `h<kHz>` is the current frequency
-  if a radio connection reports one; `ga`/`gp` is an automatic-band-select
-  flag tied to an RRC-1258 link (unrelated to this app); `l<n>` is an
-  unspecified counter.
+  if a radio connection reports one; `ga`/`gp` is the automatic-control flag
+  above; `l<n>` is an unspecified counter.
+- `GET /setswitch.htm` (no query string) — the device's full status page.
+  Antenna names aren't in the protocol above; they're rendered server-side
+  as `<td id="ar1">OCD</td>` … `<td id="ar5"></td>`, scraped from here once
+  per profile setup/refresh rather than on every poll, since they change
+  rarely.

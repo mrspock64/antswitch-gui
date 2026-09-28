@@ -23,9 +23,11 @@ type AT14Config struct {
 	Token string `json:"token"`
 }
 
-// AS1289Config holds the Microbit AS-1289's connection settings. The device
-// doesn't expose antenna names over its status protocol, so they're entered
-// by the user here instead (empty slots fall back to "Ant N" for display).
+// AS1289Config holds the Microbit AS-1289's connection settings. Names
+// aren't in the device's polled status protocol, so they're scraped from
+// its own /setswitch.htm page instead (see refreshAS1289Names) and cached
+// here — never typed in by the user — so the app still has something to
+// show at startup before the first fetch completes.
 type AS1289Config struct {
 	Host     string   `json:"host"`
 	AuthUser string   `json:"authUser"`
