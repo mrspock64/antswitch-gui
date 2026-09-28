@@ -40,10 +40,21 @@ func (c *AS1289Client) GetStatus(ctx context.Context, host, authUser, authPass s
 // SelectAntenna activates port idx+1 (the switch is exclusive, so every
 // other port is released automatically). The endpoint's response body is
 // empty, so a follow-up status fetch confirms what actually took effect.
+//
+// The device can boot into "Automatic control" mode, where it re-follows
+// band changes from a connected radio via an RRC-1258 link and can revert
+// a manual selection once one is plugged in. A manual ap<N> select works
+// fine either way, but to make it stick we switch automatic mode off
+// immediately beforehand (two quick calls in a row).
 func (c *AS1289Client) SelectAntenna(ctx context.Context, host, authUser, authPass string, idx int, names []string) (*DeviceStatus, error) {
+	autoOffURL := fmt.Sprintf("%s/setswitch.htm?ga&OFF&set=%d", normalizeHost(host), time.Now().UnixMilli())
+	if _, err := c.doGet(ctx, autoOffURL, authUser, authPass); err != nil {
+		return nil, err
+	}
+
 	port := idx + 1
-	u := fmt.Sprintf("%s/setswitch.htm?ap%d&ON%%20&set=%d", normalizeHost(host), port, time.Now().UnixMilli())
-	if _, err := c.doGet(ctx, u, authUser, authPass); err != nil {
+	selectURL := fmt.Sprintf("%s/setswitch.htm?ap%d&ON%%20&set=%d", normalizeHost(host), port, time.Now().UnixMilli())
+	if _, err := c.doGet(ctx, selectURL, authUser, authPass); err != nil {
 		return nil, err
 	}
 	return c.GetStatus(ctx, host, authUser, authPass, names)
