@@ -1,4 +1,4 @@
-# antswitch-gui
+# AntSwitch by SA0LEK
 
 Small standalone GUI client (Go + [Fyne](https://fyne.io)) for controlling a
 remote antenna switch over the network. Two device profiles are supported —
