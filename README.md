@@ -47,6 +47,18 @@ This is the same kind of reputation-based warning as the
 was flagged as malicious, the app just isn't signed with a paid Apple
 Developer certificate.
 
+If instead macOS says **"AntSwitch is damaged and can't be opened. You
+should move it to the Trash"** — that's not real corruption, it's Gatekeeper
+refusing to even show the warning above for an app whose bundle isn't
+properly signed (releases from **before v0.1.5** had this bug: `fyne
+package` left the bundle partially signed). Fixed in the build itself from
+v0.1.5 on; if you're stuck on an already-downloaded copy, clear the
+quarantine flag yourself in Terminal:
+
+```bash
+xattr -cr /Applications/AntSwitch.app
+```
+
 ## Running from source
 
 ```bash

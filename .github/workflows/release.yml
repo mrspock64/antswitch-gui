@@ -67,6 +67,14 @@ jobs:
           go install fyne.io/fyne/v2/cmd/fyne@latest
           version="${GITHUB_REF_NAME#v}"
           "$(go env GOPATH)/bin/fyne" package --executable "$ASSET_PATH" --icon Icon.png --name AntSwitch --appID net.sm7iun.antswitch-gui --appVersion "$version"
+          # fyne package leaves the bundle's Info.plist/resources unsealed
+          # (only the inner Mach-O has a linker-added ad-hoc signature) —
+          # macOS then refuses to launch it at all with a misleading "is
+          # damaged and can't be opened" error instead of the normal
+          # unidentified-developer prompt. A full ad-hoc re-sign of the
+          # whole bundle fixes that (still not notarized, so Gatekeeper
+          # still warns on first launch — just the correct warning).
+          codesign --force --deep --sign - AntSwitch.app
           mkdir dmg-root
           cp -R AntSwitch.app dmg-root/
           ln -s /Applications dmg-root/Applications
