@@ -45,9 +45,15 @@ jobs:
           CGO_ENABLED: 1
         run: |
           ext=""
-          if [ "${{ matrix.goos }}" = "windows" ]; then ext=".exe"; fi
+          ldflags="-X main.Version=${{ github.ref_name }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            ext=".exe"
+            # -H=windowsgui builds a GUI subsystem exe so Windows doesn't
+            # pop a console window behind the app on launch.
+            ldflags="-H=windowsgui $ldflags"
+          fi
           out="antswitch-gui-${{ matrix.goos }}-${{ matrix.goarch }}${ext}"
-          go build -ldflags "-X main.Version=${{ github.ref_name }}" -o "$out" .
+          go build -ldflags "$ldflags" -o "$out" .
           echo "ASSET_PATH=$out" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@v4
