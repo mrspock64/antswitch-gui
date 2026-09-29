@@ -8,10 +8,21 @@ import (
 )
 
 // Dark palette (default) — modeled after the WavelogGate2/WSPR-Beacon look.
+//
+// colorCardHover/colorCardHoverLight MUST stay translucent (low alpha), not
+// a flat opaque color: Fyne's button renderer alpha-blends this color *on
+// top of* whatever the button's own background is (buttonColorNames sets
+// backgroundBlend = ColorNameHover, then applyTheme does
+// blendColor(bgColor, hoverColor)). An opaque hover color completely
+// replaces the button's background instead of tinting it — for a
+// HighImportance (orange, selected antenna) button that meant hovering
+// swapped its orange fill for solid near-black, and since its text uses
+// ColorNameForegroundOnPrimary (a dark color meant to sit on orange), the
+// label became unreadable against that now-dark background.
 var (
 	colorBackground = color.NRGBA{R: 0x0b, G: 0x0d, B: 0x12, A: 0xff}
 	colorCard       = color.NRGBA{R: 0x15, G: 0x18, B: 0x21, A: 0xff}
-	colorCardHover  = color.NRGBA{R: 0x1b, G: 0x1f, B: 0x2a, A: 0xff}
+	colorCardHover  = color.NRGBA{R: 0xff, G: 0xff, B: 0xff, A: 0x22}
 	colorForeground = color.NRGBA{R: 0xe8, G: 0xea, B: 0xee, A: 0xff}
 	colorMuted      = color.NRGBA{R: 0x8a, G: 0x8f, B: 0x9c, A: 0xff}
 	colorBorder     = color.NRGBA{R: 0x24, G: 0x28, B: 0x33, A: 0xff}
@@ -21,7 +32,7 @@ var (
 var (
 	colorBackgroundLight = color.NRGBA{R: 0xf5, G: 0xf6, B: 0xf8, A: 0xff}
 	colorCardLight       = color.NRGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xff}
-	colorCardHoverLight  = color.NRGBA{R: 0xed, G: 0xef, B: 0xf3, A: 0xff}
+	colorCardHoverLight  = color.NRGBA{R: 0x00, G: 0x00, B: 0x00, A: 0x18}
 	colorForegroundLight = color.NRGBA{R: 0x1a, G: 0x1c, B: 0x22, A: 0xff}
 	colorMutedLight      = color.NRGBA{R: 0x6b, G: 0x70, B: 0x7c, A: 0xff}
 	colorBorderLight     = color.NRGBA{R: 0xdd, G: 0xe0, B: 0xe6, A: 0xff}

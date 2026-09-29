@@ -450,12 +450,15 @@ func (st *antState) showSettings() {
 		widget.NewLabel("Device"), deviceSelect,
 		widget.NewSeparator(),
 		at14Panel, as1289Panel,
-		widget.NewSeparator(),
-		updateRow,
 	))
-	scrollArea.SetMinSize(fyne.NewSize(360, 320))
+	scrollArea.SetMinSize(fyne.NewSize(360, 220))
 
-	content := container.NewBorder(nil, buttonRow, nil, nil, scrollArea)
+	// updateRow/buttonRow stay outside the scroll area so "Check for
+	// updates" and Save/Cancel are always visible, regardless of how tall
+	// the device-specific panel above gets (the AS-1289 one has more rows
+	// than AT-14's) or how far the window gets resized.
+	bottomArea := container.NewVBox(widget.NewSeparator(), updateRow, buttonRow)
+	content := container.NewBorder(nil, bottomArea, nil, nil, scrollArea)
 	settingsWin.SetContent(container.NewPadded(content))
 	settingsWin.Resize(fyne.NewSize(380, 460))
 	settingsWin.Show()
