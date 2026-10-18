@@ -339,9 +339,33 @@ func (st *antState) showSettings() {
 	at14TokenEntry.SetText(st.cfg.AT14.Token)
 	at14TokenEntry.SetPlaceHolder("API token")
 
+	// The flip setting lives on the device, not in our config: the checkbox
+	// mirrors what the device reports and stays disabled until that read
+	// succeeds (older firmware without /api/display just leaves it disabled).
+	// It is only sent on Save, and only if the user actually changed it.
+	at14FlipCheck := widget.NewCheck("Flip device display 180°", nil)
+	at14FlipCheck.Disable()
+	var flipLoaded, flipOnDevice bool
+	if host := st.cfg.AT14.Host; strings.TrimSpace(host) != "" {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+			defer cancel()
+			flip, err := st.at14Client.GetFlip(ctx, host)
+			if err != nil {
+				return
+			}
+			fyne.Do(func() {
+				flipLoaded, flipOnDevice = true, flip
+				at14FlipCheck.SetChecked(flip)
+				at14FlipCheck.Enable()
+			})
+		}()
+	}
+
 	at14Panel := widget.NewForm(
 		widget.NewFormItem("Host", at14HostEntry),
 		widget.NewFormItem("Token", at14TokenEntry),
+		widget.NewFormItem("Display", at14FlipCheck),
 	)
 
 	as1289HostEntry := widget.NewEntry()
@@ -431,6 +455,18 @@ func (st *antState) showSettings() {
 		if err := saveConfig(st.cfg); err != nil {
 			dialog.ShowError(err, settingsWin)
 			return
+		}
+		if newDevice == DeviceAT14 && flipLoaded && at14FlipCheck.Checked != flipOnDevice {
+			want, host, token := at14FlipCheck.Checked, st.cfg.AT14.Host, st.cfg.AT14.Token
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+				defer cancel()
+				if _, err := st.at14Client.SetFlip(ctx, host, token, want); err != nil {
+					fyne.Do(func() {
+						dialog.ShowError(fmt.Errorf("could not flip the display: %w", err), st.win)
+					})
+				}
+			}()
 		}
 		if deviceChanged {
 			st.resetNamesPlaceholder()
