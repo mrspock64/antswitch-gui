@@ -209,3 +209,7 @@ Undocumented by the manufacturer; reverse-engineered from the device's own
   as `<td id="ar1">OCD</td>` … `<td id="ar5"></td>`, scraped from here once
   per profile setup/refresh rather than on every poll, since they change
   rarely.
+
+## License
+
+[MIT](LICENSE) © 2026 SA0LEK.
