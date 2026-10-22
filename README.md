@@ -78,7 +78,10 @@ Save switches the app over to that profile.
 - **Token**: the same `API_TOKEN` configured in the firmware's `config.h`.
 
 **AS-1289**
-- **Host**: the device's IP (e.g. `192.168.86.40`).
+- **Host**: the device's IP (e.g. `192.168.86.40`). If DHCP moves it, press
+  **Find device** — the app scans the configured host's /24 (it may only be
+  reachable over a VPN route) plus every directly attached network for
+  something answering like an AS-1289 and fills the address in.
 - **Username / Password**: only needed if the device's own optional web
   password protection is enabled; leave blank otherwise.
 - **Names**: not typed in — the app scrapes them from the device's own

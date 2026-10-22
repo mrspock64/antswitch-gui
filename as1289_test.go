@@ -65,3 +65,31 @@ func TestDisplayNames(t *testing.T) {
 		t.Errorf("displayNames = %v, want %v", got, want)
 	}
 }
+
+func TestLooksLikeAS1289Status(t *testing.T) {
+	cases := []struct {
+		body string
+		want bool
+	}{
+		{"aa1|ap2|aa3|aa4|aa5|h0|ga|l57627", true},
+		{"ap1|aa2|aa3|aa4|aa5|h14074|gp|l1\n", true},
+		{"", false},
+		{"Nothing matches the given URI", false},
+		{"<html>login</html>", false},
+		{"aa1|aa2|aa3|aa4", false},              // too few ports
+		{"aa1|aa3|aa2|aa4|aa5|h0|ga|l1", false}, // ports out of order
+		{"xx1|aa2|aa3|aa4|aa5|h0|ga|l1", false}, // not ap/aa
+	}
+	for _, c := range cases {
+		if got := looksLikeAS1289Status(c.body); got != c.want {
+			t.Errorf("looksLikeAS1289Status(%q) = %v, want %v", c.body, got, c.want)
+		}
+	}
+}
+
+func TestCandidateScanPrefixesPutsConfiguredHostFirst(t *testing.T) {
+	got := candidateScanPrefixes("http://192.168.86.249/")
+	if len(got) == 0 || got[0] != "192.168.86." {
+		t.Errorf("candidateScanPrefixes = %v, want 192.168.86. first", got)
+	}
+}

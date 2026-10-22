@@ -408,8 +408,46 @@ func (st *antState) showSettings() {
 		}()
 	})
 
+	// DHCP can hand the device a new address (it has happened), so offer a
+	// scan instead of making the user hunt for the IP in a router they may
+	// not control. Scans the configured host's /24 first (it may only be
+	// reachable through a VPN route) plus every directly attached network.
+	var as1289FindBtn *widget.Button
+	as1289FindBtn = widget.NewButton("Find device", func() {
+		as1289FindBtn.Disable()
+		as1289FindBtn.SetText("Scanning…")
+		prefixes := candidateScanPrefixes(as1289HostEntry.Text)
+		user, pass := as1289UserEntry.Text, as1289PassEntry.Text
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+			defer cancel()
+			found := scanForAS1289(ctx, prefixes, user, pass)
+			fyne.Do(func() {
+				as1289FindBtn.Enable()
+				as1289FindBtn.SetText("Find device")
+				switch len(found) {
+				case 0:
+					dialog.ShowInformation("Find device",
+						"No AS-1289 found on: "+strings.Join(prefixes, "x, ")+"x\n\nIs it powered on, and is this computer on (or VPN-routed to) the same network?",
+						settingsWin)
+				case 1:
+					as1289HostEntry.SetText(found[0])
+					dialog.ShowInformation("Find device", "Found AS-1289 at "+found[0]+". Press Save to use it.", settingsWin)
+				default:
+					pick := widget.NewSelect(found, nil)
+					pick.SetSelected(found[0])
+					dialog.ShowCustomConfirm("Multiple AS-1289 found", "Use this", "Cancel", pick, func(ok bool) {
+						if ok && pick.Selected != "" {
+							as1289HostEntry.SetText(pick.Selected)
+						}
+					}, settingsWin)
+				}
+			})
+		}()
+	})
+
 	as1289Panel := widget.NewForm(
-		widget.NewFormItem("Host", as1289HostEntry),
+		widget.NewFormItem("Host", container.NewBorder(nil, nil, nil, as1289FindBtn, as1289HostEntry)),
 		widget.NewFormItem("Username", as1289UserEntry),
 		widget.NewFormItem("Password", as1289PassEntry),
 		widget.NewFormItem("Names", container.NewVBox(as1289NamesLabel, as1289RefreshBtn)),
